@@ -1,0 +1,24 @@
+{
+    "Object": [
+        "Pedestrian",
+        "Car",
+        "Two-Wheeler",
+        "Cyclist",
+        "Three-Wheeler",
+        "Rickshaw",
+        "Auto-Rickshaw",
+        "Bus",
+        "Truck",
+        "Animal"
+    ],
+    "Traffic Sign": [
+        "Pedestrian Crossing",
+        "No Parking",
+        "No Stopping",
+        "Speed Breaker Ahead",
+        "Traffic Merging",
+        "U-Turn",
+        "Left Turn",
+        "Right Turn"
+    ]
+}

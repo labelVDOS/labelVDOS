@@ -1,0 +1,234 @@
+"""
+# Copyright (C) <2018-Present> labelVDOS
+# Copyright (C) <2015-2018> Tzutalin
+# Copyright (C) 2013  MIT, Computer Science and Artificial Intelligence Laboratory. Bryan Russell, Antonio Torralba, William T. Freeman
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
+
+from PyQt5.QtGui import *
+from PyQt5.QtCore import *
+
+import sys
+from math import sqrt
+
+DEFAULT_LINE_COLOR = QColor(0, 255, 0, 128)
+DEFAULT_FILL_COLOR = QColor(255, 0, 0, 128)
+DEFAULT_SELECT_LINE_COLOR = QColor(255, 255, 255)
+DEFAULT_SELECT_FILL_COLOR = QColor(0, 128, 255, 155)
+DEFAULT_VERTEX_FILL_COLOR = QColor(0, 255, 0, 255)
+DEFAULT_HVERTEX_FILL_COLOR = QColor(255, 0, 0)
+
+def distance(p):
+    return sqrt(p.x() * p.x() + p.y() * p.y())
+
+
+class Shape(object):
+    P_SQUARE, P_ROUND = range(2)
+
+    MOVE_VERTEX, NEAR_VERTEX = range(2)
+
+    # The following class variables influence the drawing
+    # of _all_ shape objects.
+    line_color = DEFAULT_LINE_COLOR
+    fill_color = DEFAULT_FILL_COLOR
+    select_line_color = DEFAULT_SELECT_LINE_COLOR
+    select_fill_color = DEFAULT_SELECT_FILL_COLOR
+    vertex_fill_color = DEFAULT_VERTEX_FILL_COLOR
+    hvertex_fill_color = DEFAULT_HVERTEX_FILL_COLOR
+    point_type = P_ROUND
+    point_size = 8
+    scale = 1.0
+
+    def __init__(self, label=None, frame = None, idNo = None,
+                    isOccluded = None, toInterpolate = None,
+                    isInterpolated = None, line_color=None):
+        self.label = label
+        self.frame = frame
+        self.idNo = idNo
+        self.isOccluded = isOccluded
+        self.isInterpolated = isInterpolated
+        self.toInterpolate = toInterpolate
+        self.points = []
+        self.fill = False
+        self.selected = False
+
+        self._highlightIndex = None
+        self._highlightMode = self.NEAR_VERTEX
+        self._highlightSettings = {
+            self.NEAR_VERTEX: (4, self.P_ROUND),
+            self.MOVE_VERTEX: (1.5, self.P_SQUARE),
+        }
+
+        self._closed = False
+
+        if line_color is not None:
+            # Override the class line_color attribute
+            # with an object attribute. Currently this
+            # is used for drawing the pending line a different color.
+            self.line_color = line_color
+
+    def close(self):
+        self._closed = True
+
+    def reachMaxPoints(self):
+        if len(self.points) >= 4:
+            return True
+        return False
+
+    def addPoint(self, point):
+        if not self.reachMaxPoints():
+            self.points.append(point)
+
+    def popPoint(self):
+        if self.points:
+            return self.points.pop()
+        return None
+
+    def isClosed(self):
+        return self._closed
+
+    def setOpen(self):
+        self._closed = False
+
+    def paint(self, painter):
+        if self.points:
+            color = self.select_line_color if self.selected else self.line_color
+            pen = QPen(color)
+            # Try using integer sizes for smoother drawing(?)
+            pen.setWidth(max(1, int(round(2.0 / self.scale))))
+            painter.setPen(pen)
+
+            line_path = QPainterPath()
+            vrtx_path = QPainterPath()
+
+            line_path.moveTo(self.points[0])
+
+            for i, p in enumerate(self.points):
+                line_path.lineTo(p)
+                self.drawVertex(vrtx_path, i)
+            if self.isClosed():
+                line_path.lineTo(self.points[0])
+
+            painter.drawPath(line_path)
+            painter.drawPath(vrtx_path)
+            painter.fillPath(vrtx_path, self.vertex_fill_color)
+
+            # Draw text at the bottom-left
+            min_x = sys.maxsize
+            max_x = 0
+            max_y = 0
+            for point in self.points:
+                min_x = min(min_x, point.x())
+                max_x = max(max_x, point.x())
+                max_y = max(max_y, point.y())
+
+            min_y = max(0, max_y - 10)
+            max_x = (min_x + max_x) * 0.5
+
+            textFillPoints = [QPointF(min_x, max_y), QPointF(max_x, max_y),
+                                QPointF(max_x, min_y), QPointF(min_x, min_y),
+                                QPointF(min_x, max_y)]
+
+            textPath = QPainterPath()
+            textPath.moveTo(textFillPoints[0])
+            for p in textFillPoints:
+                textPath.lineTo(p)
+            painter.drawPath(textPath)
+            painter.fillPath(textPath, self.vertex_fill_color)
+
+            painter.setPen(QPen(QColor(0, 0, 0)))
+            if min_x != sys.maxsize and max_y != 0:
+                font = QFont()
+                font.setPointSize(8)
+                font.setBold(True)
+                painter.setFont(font)
+                text = self.idNo
+                if self.isOccluded:
+                    text += "_Occ"
+                painter.drawText(min_x, max_y, text)
+
+            if self.fill:
+                color = self.select_fill_color if self.selected else self.fill_color
+                painter.fillPath(line_path, color)
+
+    def drawVertex(self, path, i):
+        d = self.point_size / self.scale
+        shape = self.point_type
+        point = self.points[i]
+        if i == self._highlightIndex:
+            size, shape = self._highlightSettings[self._highlightMode]
+            d *= size
+        if self._highlightIndex is not None:
+            self.vertex_fill_color = self.hvertex_fill_color
+        else:
+            self.vertex_fill_color = Shape.vertex_fill_color
+        if shape == self.P_SQUARE:
+            path.addRect(point.x() - d / 2, point.y() - d / 2, d, d)
+        elif shape == self.P_ROUND:
+            path.addEllipse(point, d / 2.0, d / 2.0)
+        else:
+            assert False, "unsupported vertex shape"
+
+    def nearestVertex(self, point, epsilon):
+        for i, p in enumerate(self.points):
+            if distance(p - point) <= epsilon:
+                return i
+        return None
+
+    def containsPoint(self, point):
+        return self.makePath().contains(point)
+
+    def makePath(self):
+        path = QPainterPath(self.points[0])
+        for p in self.points[1:]:
+            path.lineTo(p)
+        return path
+
+    def boundingRect(self):
+        return self.makePath().boundingRect()
+
+    def moveBy(self, offset):
+        self.points = [p + offset for p in self.points]
+
+    def moveVertexBy(self, i, offset):
+        self.points[i] = self.points[i] + offset
+
+    def highlightVertex(self, i, action):
+        self._highlightIndex = i
+        self._highlightMode = action
+
+    def highlightClear(self):
+        self._highlightIndex = None
+
+    def copy(self):
+        shape = Shape("%s" % self.label)
+        shape.points = [p for p in self.points]
+        shape.fill = self.fill
+        shape.selected = self.selected
+        shape._closed = self._closed
+        if self.line_color != Shape.line_color:
+            shape.line_color = self.line_color
+        if self.fill_color != Shape.fill_color:
+            shape.fill_color = self.fill_color
+        return shape
+
+    def __len__(self):
+        return len(self.points)
+
+    def __getitem__(self, key):
+        return self.points[key]
+
+    def __setitem__(self, key, value):
+        self.points[key] = value
