@@ -16,7 +16,6 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-
 __author__ = ["aroraadit83704@gmail.com", "ishani.janveja@gmail.com"]
 __appname__ = "labelVideo"
 
@@ -104,8 +103,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
         # The Frame Class Data Structures
         self.frameClass = "None"
-        self.frameClassChoices = [self.frameClass] + [line.strip() for line in
-                        open(defaultFrameLabelsFile, "r").readlines() if line]
+        # TODO: The Following Must Have None
+        self.frameClassChoices = load(open(defaultFrameLabelsFile, "r"))
         self.gtFrameClassDict = {}
         self.frameClassDict = {}
 
@@ -278,15 +277,52 @@ class MainWindow(QMainWindow, WindowMixin):
 
 
     ## Frame Class Label Functions ##
+    def navigateChoices(self, selectionDict):
+        def makeChoice(choices):
+            dialog = LabelDialog(parent=self,
+                                listItem=choices)
+            text = dialog.popUp()
+            return text
+
+        path = []
+        while True:
+            if type(selectionDict) == dict:
+                choice = makeChoice(selectionDict.keys())
+                if choice is None:
+                    classes = None
+                    break
+                selectionDict = selectionDict[choice]
+                path.append(choice)
+            elif type(selectionDict) == list:
+                classes = selectionDict
+                break
+            else:
+                print("CODE BUG: {}".format("selectLabel"))
+                classes = None
+                break
+        return path, classes
+
     def setFrameHolderText(self):
         self.frameHolder.setText("Class: {:20s} | Frame".format(self.frameClass))
 
     def assignClassLabel(self):
-        labelDialog = LabelDialog(parent=self,
-                                    listItem = self.frameClassChoices,
-                                    title = "Frame Class")
-        text = labelDialog.popUp(text=self.frameClass)
-        if text is not None:
+        path, choices = self.navigateChoices(self.frameClassChoices)
+        if choices is None or path is None:
+            return
+        if len(path) > 0:
+            text = " - ".join(path)
+        else:
+            text = ""
+        if len(choices) > 0:
+            labelDialog = LabelDialog(parent=self,
+                                        listItem = choices,
+                                        title = "Frame Class")
+            choice = labelDialog.popUp(text=self.frameClass)
+            if choice is not None:
+                text = text + " - " + choice
+            else:
+                text = ""
+        if len(text) > 0:
             self.frameClass = text
             self.gtFrameClassDict[self.frameNumber] = text
             self.setFrameHolderText()
@@ -348,43 +384,26 @@ class MainWindow(QMainWindow, WindowMixin):
                 print("CODE BUG {}".format("shapeClick"))
 
     def selectLabel(self, prevText = None, prevIdNo = None):
-        def computeItemType(dictionary):
-            if len(list(dictionary.items())) > 0:
-                return type(list(dictionary.values())[0])
-            else:
-                return None
-
-        def makeChoice(choices):
-            dialog = LabelDialog(parent=self,
-                                listItem=choices)
-            text = dialog.popUp()
-            return text
-
         selectionDict = self.labelChoices
-        itemType = computeItemType(selectionDict)
-        if itemType == list:
-            choice = makeChoice(selectionDict.keys())
-            classes = selectionDict[choice]
-            labelDialog = LabelDialog(parent=self,
-                                        listItem = classes,
-                                        title = "Label")
-            idDialog = IdDialog(parent=self,
-                                        listItem=self.prevFrameIds,
-                                        title = "ID")
 
-            if prevText is None:
-                prevText = self.prevLabelText
-            if prevIdNo is None:
-                prevIdNo = self.prevIDText
-            text = labelDialog.popUp(text=prevText)
-            idNo = idDialog.popUp(text=prevIdNo)
-            return text, idNo
-        elif itemType == dict:
-            choice = makeChoice(selectionDict.keys())
-            selectionDict = selectionDict[choice]
-        else:
-            print("CODE BUG: {}".format("selectLabel"))
+        _, classes = self.navigateChoices(selectionDict)
+        if classes is None:
             return None, None
+
+        labelDialog = LabelDialog(parent=self,
+                                    listItem = classes,
+                                    title = "Label")
+        idDialog = IdDialog(parent=self,
+                                    listItem=self.prevFrameIds,
+                                    title = "ID")
+
+        if prevText is None:
+            prevText = self.prevLabelText
+        if prevIdNo is None:
+            prevIdNo = self.prevIDText
+        text = labelDialog.popUp(text=prevText)
+        idNo = idDialog.popUp(text=prevIdNo)
+        return text, idNo
 
     def shapeTypeSelector(self):
         self.timer.stop()
@@ -1494,7 +1513,7 @@ def get_main_app():
     app.setApplicationName(__appname__)
     appData = os.path.join(os.path.dirname(__file__), 'appData')
     predefLabelsPath = os.path.join(appData, "labels.json")
-    predefFrameLabelsPath = os.path.join(appData, "predefinedClasses.txt")
+    predefFrameLabelsPath = os.path.join(appData, "classes.json")
     settingsPath = os.path.join(appData, '.settings.pkl')
     win = MainWindow(settingsPath, predefLabelsPath, predefFrameLabelsPath)
     win.show()
