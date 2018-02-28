@@ -18,3 +18,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 from interpolationComponents.interpolate import createShadows, createInterpolations, propagateFrameLabel
+from interpolationComponents.objectDetection import objectDetection

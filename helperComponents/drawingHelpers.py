@@ -60,6 +60,7 @@ class Shape(object):
         self.isOccluded = isOccluded
         self.isInterpolated = isInterpolated
         self.toInterpolate = toInterpolate
+        self.isDetection = False
         self.points = []
         self.fill = False
         self.selected = False
@@ -74,9 +75,6 @@ class Shape(object):
         self._closed = False
 
         if line_color is not None:
-            # Override the class line_color attribute
-            # with an object attribute. Currently this
-            # is used for drawing the pending line a different color.
             self.line_color = line_color
 
     def close(self):
@@ -146,7 +144,10 @@ class Shape(object):
             for p in textFillPoints:
                 textPath.lineTo(p)
             painter.drawPath(textPath)
-            painter.fillPath(textPath, self.vertex_fill_color)
+            if self.isDetection:
+                painter.fillPath(textPath, QColor(0, 255, 255))
+            else:
+                painter.fillPath(textPath, QColor(255, 0, 255))
 
             painter.setPen(QPen(QColor(0, 0, 0)))
             if min_x != sys.maxsize and max_y != 0:

@@ -110,3 +110,6 @@ def createShadows(gtIdToFrameToShape, frame):
 				if shape.toInterpolate:
 					propShadows.append(propagateShadows(shape, frame))
 	return propShadows
+
+# def createProposals(detections, frame, existingShapes):
+# return detections.show(frame, existingShapes)

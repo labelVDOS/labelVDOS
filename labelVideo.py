@@ -123,6 +123,9 @@ class MainWindow(QMainWindow, WindowMixin):
         self.gtIdToFrameToShape = defaultdict(dict)
         self.idChanged = []
 
+        # Additional Data Structures for Object Detection
+        self.objectDetections = objectDetection("C:/Users/USER/Downloads/VideoAnnotation/0000.txt")
+
         # Other Application State Variables
         self.image = QImage()
         self.filePath = None
@@ -248,6 +251,16 @@ class MainWindow(QMainWindow, WindowMixin):
         for action in self.actions.onShapesPresent:
             action.setEnabled(True)
 
+    def setUpProposals(self):
+        proposals = self.objectDetections.show(self.frameNumber, self.canvas.shapes)
+        for shape in proposals:
+            item = self.createItem(shape)
+            self.shadowItemsToShapes[item] = shape
+            self.shadowShapesToItems[shape] = item
+            self.labelList.addItem(item)
+            self.canvas.shapes.append(shape)
+        self.canvas.repaint()
+
     def convertShadowToReal(self):
         for shape in self.shadowToReal:
             self.addLabel(deepcopy(shape))
@@ -270,6 +283,8 @@ class MainWindow(QMainWindow, WindowMixin):
         shapes = shadowShapes + self.framesToShapes[self.frameNumber]
         self.canvas.loadShapes(shapes)
         self.updateLabelList(shapes)
+
+        self.setUpProposals()
         self.refreshFrameIds()
 
         self.propagateClassLabel()
@@ -377,7 +392,22 @@ class MainWindow(QMainWindow, WindowMixin):
                         self.gtIdToFrameToShape[shape.idNo][self.frameNumber] = shape
             elif shape in self.shadowShapesToItems:
                 self.shadowShapesToItems[shape].setSelected(True)
+                if int(shape.idNo) < 0:
+                    self.timer.stop()
+                    text, idNo = self.selectLabel()
+                    if text is not None and idNo is not None:
+                        shape.idNo = "{:03d}".format(int(idNo))
+                        shape.label = text
+                        self.shadowShapesToItems[shape].setBackground(generateColorByText(text))
+                        text = "{:03d}".format(int(idNo)) + " - " + text
+                        self.shadowShapesToItems[shape].setText(text)
+                        shape.isDetection = False
+                    else:
+                        self.timer.start(self.autoSaveTime)
+                        return
+                    self.timer.start(self.autoSaveTime)
                 if shape not in self.shadowToReal:
+                    shape.toInterpolate = True
                     shape.isInterpolated = False
                     self.shadowToReal.append(shape)
             else:
@@ -512,7 +542,7 @@ class MainWindow(QMainWindow, WindowMixin):
             return items[0]
         return None
 
-    def addLabel(self, shape, loadFromFile = False):
+    def addLabel(self, shape):
         item = self.createItem(shape)
 
         if shape.frame == None:
@@ -663,7 +693,7 @@ class MainWindow(QMainWindow, WindowMixin):
             if frame == self.frameNumber:
                 s.append(shape)
 
-            self.addLabel(shape, loadFromFile = True)
+            self.addLabel(shape)
 
         self.canvas.loadShapes(s)
 
@@ -854,6 +884,7 @@ class MainWindow(QMainWindow, WindowMixin):
         self.setFitWindow()
 
         loadAnnotationsIfExist(targetDirPath)
+        self.setUpProposals()
         selectItemLabelList()
 
         self.setClean()
