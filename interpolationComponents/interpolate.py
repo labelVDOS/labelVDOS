@@ -22,9 +22,12 @@ from copy import deepcopy
 from collections import defaultdict
 from PyQt5.QtCore import QPointF
 from annotationComponents.labelFile import LabelFile
+from interpolationComponents.objectDetection import convertShapeToBBox
 
 NearestLowInit  = -1
 NearestHighInit = 1e8
+
+iouAreaThresh = 0.5
 
 def findNearestFrames(frameList, frame):
 	nearestLow  = NearestLowInit
@@ -88,7 +91,37 @@ def interpolateShadows(startShape, endShape):
 
 	return interpShadows
 
-def createInterpolations(gtIdToFrameToShape, frame, idChanges):
+def shapeCompete(interp, detect):
+	def area(shape):
+		bbox = convertShapeToBBox(shape)
+		return float(abs((bbox[3] - bbox[1]) * (bbox[2] - bbox[0])))
+
+	interpArea = area(interp)
+	detectArea = area(detect)
+
+	if interpArea > 0:
+		if detectArea / interpArea > iouAreaThresh:
+			return True # detect
+	return False # interp
+
+def interpolationVersusDetection(objectDetections, interpFramesToShapes):
+	overallFramesToShapes = defaultdict(list)
+	for frame, shapeList in interpFramesToShapes.items():
+		for shape in shapeList:
+			nearestShape = objectDetections.getNearest(frame, shape)
+			if nearestShape:
+				if shapeCompete(shape, nearestShape):
+					nearestShape.idNo = shape.idNo
+					nearestShape.isInterpolated = True
+					nearestShape.toInterpolate = True
+					# nearestShape.isDetection = False
+					overallFramesToShapes[frame].append(nearestShape)
+					objectDetections.objectDetections[frame].remove(nearestShape)
+					continue
+			overallFramesToShapes[frame].append(shape)
+	return overallFramesToShapes
+
+def createInterpolations(gtIdToFrameToShape, frame, idChanges, objectDetections):
 	interpFramesToShapes = defaultdict(list)
 	for idNo in idChanges:
 		framesToShapes = gtIdToFrameToShape[idNo]
@@ -99,7 +132,9 @@ def createInterpolations(gtIdToFrameToShape, frame, idChanges):
 				if startShape.toInterpolate:
 					for frame, shape in interpolateShadows(startShape, endShape):
 						interpFramesToShapes[frame].append(shape)
-	return interpFramesToShapes
+	overallFramesToShapes = interpolationVersusDetection(objectDetections,
+														interpFramesToShapes)
+	return overallFramesToShapes
 
 def createShadows(gtIdToFrameToShape, frame):
 	propShadows = []
@@ -110,6 +145,3 @@ def createShadows(gtIdToFrameToShape, frame):
 				if shape.toInterpolate:
 					propShadows.append(propagateShadows(shape, frame))
 	return propShadows
-
-# def createProposals(detections, frame, existingShapes):
-# return detections.show(frame, existingShapes)

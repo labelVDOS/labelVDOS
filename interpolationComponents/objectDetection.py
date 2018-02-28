@@ -38,12 +38,35 @@ def iou(bb_test,bb_gt):
 			  + (bb_gt[2]-bb_gt[0])*(bb_gt[3]-bb_gt[1]) - wh)
 	return(o)
 
+def convertShapeToBBox(shape):
+	xmin = float('inf')
+	ymin = float('inf')
+	xmax = float('-inf')
+	ymax = float('-inf')
+	for p in shape.points:
+		x = p.x()
+		y = p.y()
+		xmin = min(x, xmin)
+		ymin = min(y, ymin)
+		xmax = max(x, xmax)
+		ymax = max(y, ymax)
+
+	if xmin < 1:
+		xmin = 1
+
+	if ymin < 1:
+		ymin = 1
+
+	return np.array([int(xmin), int(ymin), int(xmax), int(ymax)])
+
 class objectDetection:
 	count = 0
 
-	def __init__(self, objectDetectionFile, iouThreshold = 0.3):
+	def __init__(self, objectDetectionFile, iouThreshold = 0.3,
+					iouCompetitorThresh = 0.7):
 		self.objectDetections = self.load(objectDetectionFile)
 		self.iouThreshold = iouThreshold
+		self.iouCompetitorThresh = iouCompetitorThresh
 
 	def load(self, objectDetectionFile):
 		kitti_annotation_mapping = {0:"Frame", 1:"ID", 2:"Type", 3:"Truncated",
@@ -54,7 +77,7 @@ class objectDetection:
 
 		def parse_annotations(annotations):
 			annotations = annotations[[0, 1, 2, 3, 4, 6, 7, 8, 9]]
-			annotations = annotations.rename_axis(kitti_annotation_mapping, axis = 1)
+			annotations = annotations.rename(kitti_annotation_mapping, axis = 1)
 			annotations["w"] = annotations["x_R"] - annotations["x_L"]
 			annotations["h"] = annotations["y_T"] - annotations["y_B"]
 			annotations["c_x"] = 0.5 * ( annotations["x_R"] + annotations["x_L"] )
@@ -98,32 +121,12 @@ class objectDetection:
 		return convertAnnotationsToShapes()
 
 	def show(self, frame, existingShapes):
-		def convertPointsToBndBox(points):
-			xmin = float('inf')
-			ymin = float('inf')
-			xmax = float('-inf')
-			ymax = float('-inf')
-			for p in points:
-				x = p.x()
-				y = p.y()
-				xmin = min(x, xmin)
-				ymin = min(y, ymin)
-				xmax = max(x, xmax)
-				ymax = max(y, ymax)
-
-			if xmin < 1:
-				xmin = 1
-
-			if ymin < 1:
-				ymin = 1
-
-			return np.array([int(xmin), int(ymin), int(xmax), int(ymax)])
 
 		def convertToArrays(frame, existingShapes):
 			detections = self.objectDetections[frame]
-			detectionArray = [convertPointsToBndBox(s.points) for s in
+			detectionArray = [convertShapeToBBox(s) for s in
 								detections]
-			presentArray = [convertPointsToBndBox(s.points) for s in
+			presentArray = [convertShapeToBBox(s) for s in
 								existingShapes]
 			return detections, detectionArray, presentArray
 
@@ -142,3 +145,13 @@ class objectDetection:
 			return proposals
 
 		return computeProposals(frame, existingShapes)
+
+	def getNearest(self, frame, shape):
+		bbox = convertShapeToBBox(shape)
+		competitorShapes = self.objectDetections[frame]
+		competitorIoUs = [convertShapeToBBox(s) for s in competitorShapes]
+		competitorIoUs = np.array([iou(bbox, comp) for comp in competitorIoUs])
+		bestCompetitor = np.argmax(competitorIoUs)
+		if competitorIoUs[bestCompetitor] > self.iouCompetitorThresh:
+			return competitorShapes[bestCompetitor]
+		return None

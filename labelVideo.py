@@ -16,7 +16,7 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
-__author__ = ["aroraadit83704@gmail.com", "ishani.janveja@gmail.com"]
+__author__ = ["aroraadit@protonmail.com", "ishani.janveja@gmail.com"]
 __appname__ = "labelVideo"
 
 import os
@@ -54,7 +54,7 @@ class MainWindow(QMainWindow, WindowMixin):
     FIT_WINDOW, FIT_WIDTH, MANUAL_ZOOM = list(range(3))
 
     def __init__(self, defaultSettingsFile, defaultLabelsFile,
-                        defaultFrameLabelsFile):
+                defaultFrameLabelsFile, defaultAnnotationsFile):
 
         # Initialisation of the Main Window Super Class
         super(MainWindow, self).__init__()
@@ -263,6 +263,8 @@ class MainWindow(QMainWindow, WindowMixin):
 
     def convertShadowToReal(self):
         for shape in self.shadowToReal:
+            if shape in self.objectDetections.objectDetections[shape.frame]:
+                self.objectDetections.objectDetections[shape.frame].remove(shape)
             self.addLabel(deepcopy(shape))
         self.shadowToReal = []
 
@@ -274,7 +276,7 @@ class MainWindow(QMainWindow, WindowMixin):
 
         self.convertShadowToReal()
         interpFramesToShapes = createInterpolations(self.gtIdToFrameToShape,
-                self.prevFrameNumber, self.idChanged)
+                self.prevFrameNumber, self.idChanged, self.objectDetections)
         self.idChanged = []
 
         shadowShapes = createShadows(self.gtIdToFrameToShape, self.frameNumber)
