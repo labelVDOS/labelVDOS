@@ -57,7 +57,7 @@ class CsvWriter:
                 derived from Interpolation
             frameNumber: Frame Number of Object
         """
-        box = (name, idNo, xmin, ymax, xmax, ymin, int(isOccluded),
+        box = (name, idNo, xmin, ymin, xmax, ymax, int(isOccluded),
                 int(toInterpolate), int(isInterpolated))
         self.boxDict[frameNumber].append(box)
 
